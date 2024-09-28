@@ -1,6 +1,7 @@
 import osmnx as ox
 from flask import Flask, request, jsonify
 import pandas as pd
+from trafficind import calculate_average_traffic_level
 
 app = Flask(__name__)
 
@@ -54,9 +55,11 @@ def calculate_route():
     orig = ox.distance.nearest_nodes(G, Ay, Ax)
     dest = ox.distance.nearest_nodes(G, By, Bx)
     
-    route = ox.shortest_path(G, orig, dest, weight="length")
-    route = node_ids_to_coords(route, G)
-    print(route)
+    routes = ox.k_shortest_paths(G, orig, dest, k=30, weight="length")
+    for route in routes:
+        route = node_ids_to_coords(route, G)
+        calculate_average_traffic_level(route)
+    route = routes[0]
     return jsonify(route)
 
 if __name__ == '__main__':
