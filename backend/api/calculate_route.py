@@ -1,7 +1,41 @@
 import osmnx as ox
 from flask import Flask, request, jsonify
+import pandas as pd
+import requests
+import os
+
+def get_traffic_data(Ax, Ay, Bx, By):
+    api_key = os.getenv("TOMTOM_API_KEY")
+    url = f"https://api.tomtom.com/routing/1/calculateRoute/{Ax},{Ay}:{Bx},{By}/json?key={api_key}&traffic=true"
+    response = requests.get(url)
+
+    if response.status_code == 200:
+        data = response.json()
+        route_summary = data['routes'][0]['summary']
+        return route_summary.get('trafficLengthInMeters', 0) / route_summary.get('lengthInMeters', 1) * 100
+    else:
+        return None
 
 app = Flask(__name__)
+
+def get_coordinates(address):
+    csv_file = '../data/interpreter.csv'
+    # Read the CSV file
+    df = pd.read_csv(csv_file, delimiter='\t')
+    
+    # Split the address into street and house number
+    street, house_number = address.rsplit(' ', 1)
+    
+    # Filter the DataFrame for the matching street and house number
+    result = df[(df['addr:street'] == street) & (df['addr:housenumber'] == house_number)]
+    
+    # If a match is found, return the coordinates
+    if not result.empty:
+        lat = result['@lat'].values[0]
+        lon = result['@lon'].values[0]
+        return (lat, lon)
+    else:
+        return None  # or raise an exception
 
 def node_ids_to_coords(route, G):
     coords = []
@@ -23,18 +57,21 @@ def calculate_route():
         return jsonify({"error": "Start and end coordinates must be provided"}), 400
 
     try:
-        Ax, Ay = data['start']
-        Bx, By = data['end']
+        A = data['start']
+        B = data['end']
     except (ValueError, TypeError):
         return jsonify({"error": "Invalid start or end coordinates"}), 400
 
-    G = ox.load_graphml("./krakow3200m.graphml")    
+    Ax, Ay = get_coordinates(A)
+    Bx, By = get_coordinates(B)
+    G = ox.load_graphml("../data/krakow3200m.graphml")    
     orig = ox.distance.nearest_nodes(G, Ay, Ax)
     dest = ox.distance.nearest_nodes(G, By, Bx)
     
     route = ox.shortest_path(G, orig, dest, weight="length")
     route = node_ids_to_coords(route, G)
-    
+    traffic_data = get_traffic_data(Ax, Ay, Bx, By)
+    print(traffic_data)
     return jsonify(route)
 
 if __name__ == '__main__':
