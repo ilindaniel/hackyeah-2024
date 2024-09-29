@@ -1,16 +1,24 @@
 import requests
 import math
 
-# Function to get elevation for multiple points
+# Function to get elevation for multiple points using POST
 def get_elevations(coords):
-    locations = '|'.join(f"{coord[0]},{coord[1]}" for coord in coords)
-    url = f"https://api.open-elevation.com/api/v1/lookup?locations={locations}"
-    response = requests.get(url)
+    url = "https://api.open-elevation.com/api/v1/lookup"
+    payload = {
+        "locations": [{"latitude": lat, "longitude": lon} for lat, lon in coords]
+    }
+    headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+    }
+
+    response = requests.post(url, headers=headers, json=payload)
+    
     if response.status_code == 200:
         data = response.json()
-        return {f"{coord[0]},{coord[1]}": result['elevation'] for coord, result in zip(coords, data['results'])}
+        return {f"{result['latitude']},{result['longitude']}": result['elevation'] for result in data['results']}
     else:
-        print("Error fetching elevation data")
+        print("Error fetching elevation data:", response.status_code, response.text)
         return {}
 
 # Function to calculate slope percentage
@@ -19,6 +27,10 @@ def calculate_slope(elevation_diff, distance):
         return 0
     slope_percentage = (elevation_diff / distance) * 100
     return slope_percentage
+
+
+
+
 
 # Main function to process multiple consecutive pairs of coordinates
 # def process_elevation(graph):
